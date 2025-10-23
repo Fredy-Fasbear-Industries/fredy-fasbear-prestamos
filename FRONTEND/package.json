@@ -1,0 +1,35 @@
+{
+  "name": "fredy-fasbear-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Frontend para sistema de empeño Fredy Fasbear Industries",
+  "scripts": {
+    "dev": "nuxt dev --port 3000 --host 0.0.0.0",
+    "dev-local": "nuxt dev --port 3000",
+    "build": "nuxt build",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare",
+    "start": "nuxt start",
+    "generate": "nuxt generate",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
+  },
+  "dependencies": {
+    "@nuxt/eslint": "^0.5.7",
+    "@pinia/nuxt": "^0.11.2",
+    "chart.js": "^4.5.0",
+    "nuxt": "^3.13.0",
+    "vue": "^3.5.21",
+    "vue-router": "latest"
+  },
+  "devDependencies": {
+    "@nuxt/devtools": "^1.7.0",
+    "@types/node": "^22.7.4",
+    "eslint": "^9.11.1",
+    "typescript": "^5.6.2"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  }
+}

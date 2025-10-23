@@ -1,0 +1,460 @@
+// FRONTEND/plugins/router.client.js
+export default defineNuxtPlugin((nuxtApp) => {
+  const router = useRouter()
+  const { isAuthenticated, user } = useAuth()
+
+  console.log('🚀 Inicializando configuración del router...')
+
+  // Configurar manejo global de errores de navegación
+  router.onError((error, to, from) => {
+    console.error('🚨 Error de navegación:', {
+      error: error.message,
+      from: from?.fullPath,
+      to: to?.fullPath,
+      stack: error.stack
+    })
+
+    // Manejar errores específicos
+    if (error.message.includes('404') || error.message.includes('not found')) {
+      console.log('🔍 Redirigiendo por página no encontrada')
+      return handleNotFoundError(to, from)
+    }
+
+    if (error.message.includes('403') || error.message.includes('forbidden')) {
+      console.log('🚫 Redirigiendo por acceso prohibido')
+      return handleForbiddenError(to, from)
+    }
+
+    if (error.message.includes('500') || error.message.includes('server')) {
+      console.log('💥 Error del servidor')
+      return handleServerError(error)
+    }
+
+    // Error genérico
+    console.log('❓ Error de navegación genérico')
+    throw createError({
+      statusCode: 500,
+      statusMessage: 'Error de navegación',
+      data: { 
+        originalError: error.message,
+        from: from?.fullPath,
+        to: to?.fullPath
+      }
+    })
+  })
+
+  // Interceptar antes de cada navegación
+  router.beforeEach(async (to, from) => {
+    console.log('🧭 Navegación interceptada:', {
+      from: from.fullPath,
+      to: to.fullPath,
+      authenticated: isAuthenticated.value,
+      userType: user.value?.tipoUsuario
+    })
+
+    // Limpiar estado previo
+    await clearPreviousState()
+
+    // Validar rutas protegidas
+    const navigationResult = await validateProtectedRoute(to, from)
+    if (navigationResult !== true) {
+      return navigationResult
+    }
+
+    // Validar permisos por rol
+    const roleResult = await validateRolePermissions(to, from)
+    if (roleResult !== true) {
+      return roleResult
+    }
+
+    // Log de navegación exitosa
+    console.log('✅ Navegación permitida')
+    return true
+  })
+
+  // Interceptar después de cada navegación exitosa
+  router.afterEach((to, from, failure) => {
+    if (failure) {
+      console.error('❌ Navegación falló:', failure)
+      return
+    }
+
+    console.log('🏁 Navegación completada:', {
+      from: from?.fullPath,
+      to: to.fullPath,
+      timestamp: new Date().toISOString()
+    })
+
+    // Actualizar estado de la aplicación
+    updateApplicationState(to)
+
+    // Limpiar notificaciones anteriores
+    clearNotifications()
+
+    // Scroll al top para nuevas páginas
+    if (to.path !== from?.path) {
+      nextTick(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      })
+    }
+  })
+
+  // ===== FUNCIONES AUXILIARES =====
+
+  /**
+   * Manejar error 404
+   */
+  const handleNotFoundError = (to, from) => {
+    console.log('📍 Manejando error 404 para:', to.fullPath)
+
+    if (isAuthenticated.value) {
+      // Redirigir al dashboard apropiado según el tipo de usuario
+      const dashboards = {
+        'Cliente': '/empeno',
+        'Evaluador': '/evaluador',
+        'Administrador': '/admin',
+        'Cobrador': '/collector',
+        'Personal': '/personal'
+      }
+
+      const dashboard = dashboards[user.value?.tipoUsuario] || '/empeno'
+      console.log('🏠 Redirigiendo a dashboard:', dashboard)
+      
+      return navigateTo(dashboard, { replace: true })
+    } else {
+      console.log('🏠 Redirigiendo a inicio')
+      return navigateTo('/', { replace: true })
+    }
+  }
+
+  /**
+   * Manejar error 403
+   */
+  const handleForbiddenError = (to, from) => {
+    console.log('🚫 Manejando error de acceso prohibido')
+    
+    if (isAuthenticated.value) {
+      // Redirigir al dashboard del usuario
+      const dashboards = {
+        'Cliente': '/empeno',
+        'Evaluador': '/evaluador', 
+        'Administrador': '/admin',
+        'Cobrador': '/cobranza',
+        'Personal': '/personal'
+      }
+
+      const dashboard = dashboards[user.value?.tipoUsuario] || '/empeno'
+      
+      // Mostrar mensaje de error
+      if (process.client) {
+        setTimeout(() => {
+          showNotification('No tienes permisos para acceder a esta página', 'error')
+        }, 500)
+      }
+
+      return navigateTo(dashboard, { replace: true })
+    } else {
+      return navigateTo('/auth/login', { 
+        query: { redirect: to.fullPath },
+        replace: true 
+      })
+    }
+  }
+
+  /**
+   * Manejar error del servidor
+   */
+  const handleServerError = (error) => {
+    console.error('💥 Error del servidor:', error)
+    
+    throw createError({
+      statusCode: 500,
+      statusMessage: 'Error interno del servidor',
+      data: {
+        message: 'Ocurrió un error interno. Por favor, intenta nuevamente.',
+        canRetry: true
+      }
+    })
+  }
+
+  /**
+   * Limpiar estado previo
+   */
+  const clearPreviousState = async () => {
+    // Limpiar notificaciones
+    if (process.client) {
+      const notifications = document.querySelectorAll('.notification')
+      notifications.forEach(notification => {
+        notification.remove()
+      })
+    }
+  }
+
+  /**
+   * Validar rutas protegidas
+   */
+  const validateProtectedRoute = async (to, from) => {
+    // Rutas que requieren autenticación
+    const protectedRoutes = [
+      '/empeno',
+      '/evaluador',
+      '/admin', 
+      '/cobranza',
+      '/personal',
+      '/profile'
+    ]
+
+    const requiresAuth = protectedRoutes.some(route => to.path.startsWith(route))
+
+    if (requiresAuth && !isAuthenticated.value) {
+      console.log('🔒 Ruta protegida sin autenticación')
+      
+      return navigateTo('/auth/login', {
+        query: { redirect: to.fullPath },
+        replace: true
+      })
+    }
+
+    // Rutas solo para invitados
+    const guestOnlyRoutes = ['/auth/login', '/auth/register']
+    const isGuestOnly = guestOnlyRoutes.some(route => to.path.startsWith(route))
+
+    if (isGuestOnly && isAuthenticated.value) {
+      console.log('👤 Usuario autenticado en ruta de invitado')
+      
+      // Redirigir al dashboard apropiado
+      const dashboards = {
+        'Cliente': '/empeno',
+        'Evaluador': '/evaluador',
+        'Administrador': '/admin',
+        'Cobrador': '/cobranza',
+        'Personal': '/personal'
+      }
+
+      const dashboard = dashboards[user.value?.tipoUsuario] || '/empeno'
+      return navigateTo(dashboard, { replace: true })
+    }
+
+    return true
+  }
+
+  /**
+   * Validar permisos por rol
+   */
+  const validateRolePermissions = async (to, from) => {
+    if (!isAuthenticated.value) {
+      return true // Ya se maneja en validateProtectedRoute
+    }
+
+    const userType = user.value?.tipoUsuario
+
+    // Definir reglas de acceso por tipo de usuario
+    const accessRules = {
+      'Cliente': {
+        allowed: ['/empeno', '/profile', '/'],
+        default: '/empeno'
+      },
+      'Evaluador': {
+        allowed: ['/evaluador', '/profile', '/'],
+        default: '/evaluador'
+      },
+      'Administrador': {
+        allowed: ['/admin', '/evaluador', '/empeno', '/cobranza', '/personal', '/profile', '/'],
+        default: '/admin'
+      },
+      'Cobrador': {
+        allowed: ['/cobranza', '/profile', '/'],
+        default: '/cobranza'
+      },
+      'Personal': {
+        allowed: ['/personal', '/profile', '/'],
+        default: '/personal'
+      }
+    }
+
+    const userRules = accessRules[userType]
+    
+    if (!userRules) {
+      console.log('❓ Tipo de usuario desconocido:', userType)
+      return navigateTo('/auth/login', { replace: true })
+    }
+
+    // Verificar si la ruta está permitida
+    const hasAccess = userRules.allowed.some(allowedPath => {
+      return to.path === allowedPath || to.path.startsWith(allowedPath + '/')
+    })
+
+    if (!hasAccess) {
+      console.log(`🚫 Usuario ${userType} sin acceso a ${to.path}`)
+      
+      // Mostrar mensaje de error
+      if (process.client) {
+        setTimeout(() => {
+          showNotification('No tienes permisos para acceder a esta sección', 'error')
+        }, 500)
+      }
+
+      return navigateTo(userRules.default, { replace: true })
+    }
+
+    return true
+  }
+
+  /**
+   * Actualizar estado de la aplicación
+   */
+  const updateApplicationState = (to) => {
+    // Actualizar título de la página
+    if (process.client) {
+      nextTick(() => {
+        const titles = {
+          '/empeno': 'Mis Préstamos',
+          '/evaluador': 'Panel de Evaluador',
+          '/admin': 'Panel de Administración',
+          '/cobranza': 'Panel de Cobranza',
+          '/personal': 'Panel de Personal',
+          '/profile': 'Mi Perfil',
+          '/auth/login': 'Iniciar Sesión',
+          '/auth/register': 'Registrarse'
+        }
+
+        let pageTitle = titles[to.path]
+        
+        if (!pageTitle) {
+          // Generar título basado en la ruta
+          const pathParts = to.path.split('/').filter(Boolean)
+          pageTitle = pathParts.map(part => 
+            part.charAt(0).toUpperCase() + part.slice(1)
+          ).join(' - ')
+        }
+
+        if (pageTitle) {
+          document.title = `${pageTitle} - Fredy Fasbear Préstamos`
+        }
+      })
+    }
+
+    // Actualizar meta tags si es necesario
+    if (to.meta) {
+      // Lógica para actualizar meta tags dinámicamente
+    }
+  }
+
+  /**
+   * Limpiar notificaciones
+   */
+  const clearNotifications = () => {
+    if (process.client) {
+      // Limpiar notificaciones después de un delay
+      setTimeout(() => {
+        const notifications = document.querySelectorAll('.notification.auto-hide')
+        notifications.forEach(notification => {
+          notification.style.opacity = '0'
+          setTimeout(() => notification.remove(), 300)
+        })
+      }, 100)
+    }
+  }
+
+  /**
+   * Mostrar notificación
+   */
+  const showNotification = (message, type = 'info') => {
+    if (!process.client) return
+
+    // Crear elemento de notificación
+    const notification = document.createElement('div')
+    notification.className = `notification notification-${type} auto-hide`
+    notification.style.cssText = `
+      position: fixed;
+      top: 2rem;
+      right: 2rem;
+      z-index: 10000;
+      padding: 1rem 1.5rem;
+      border-radius: 8px;
+      color: white;
+      font-weight: 600;
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+      opacity: 0;
+      transform: translateX(100%);
+      transition: all 0.3s ease;
+    `
+
+    // Colores por tipo
+    const colors = {
+      success: '#2ECC71',
+      error: '#C0392B',
+      warning: '#E67E22',
+      info: '#3498DB'
+    }
+
+    notification.style.backgroundColor = colors[type] || colors.info
+    notification.textContent = message
+
+    // Agregar al DOM
+    document.body.appendChild(notification)
+
+    // Animar entrada
+    requestAnimationFrame(() => {
+      notification.style.opacity = '1'
+      notification.style.transform = 'translateX(0)'
+    })
+
+    // Auto-remove después de 5 segundos
+    setTimeout(() => {
+      notification.style.opacity = '0'
+      notification.style.transform = 'translateX(100%)'
+      setTimeout(() => {
+        if (notification.parentNode) {
+          notification.parentNode.removeChild(notification)
+        }
+      }, 300)
+    }, 5000)
+  }
+
+  // Configurar manejo de errores no capturados
+  if (process.client) {
+    window.addEventListener('unhandledrejection', (event) => {
+      console.error('🚨 Promise rejection no manejada:', event.reason)
+      
+      // Si es un error de navegación, manejarlo gracefully
+      if (event.reason?.message?.includes('navigation')) {
+        event.preventDefault()
+        console.log('🔧 Manejando error de navegación no capturado')
+        
+        // Redirigir a una página segura
+        if (isAuthenticated.value) {
+          const dashboards = {
+            'Cliente': '/empeno',
+            'Evaluador': '/evaluador',
+            'Administrador': '/admin',
+            'Cobrador': '/cobranza',
+            'Personal': '/personal'
+          }
+          const dashboard = dashboards[user.value?.tipoUsuario] || '/empeno'
+          router.push(dashboard)
+        } else {
+          router.push('/')
+        }
+      }
+    })
+
+    window.addEventListener('error', (event) => {
+      console.error('🚨 Error global no manejado:', event.error)
+    })
+  }
+
+  console.log('✅ Configuración del router completada')
+
+  // Exponer utilidades globalmente para debugging en desarrollo
+  if (process.env.NODE_ENV === 'development' && process.client) {
+    window.__routerUtils = {
+      showNotification,
+      clearNotifications,
+      validateRolePermissions,
+      isAuthenticated: () => isAuthenticated.value,
+      user: () => user.value
+    }
+    console.log('🛠️ Router utils disponibles en window.__routerUtils')
+  }
+})

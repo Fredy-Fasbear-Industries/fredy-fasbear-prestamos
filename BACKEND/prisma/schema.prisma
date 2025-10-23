@@ -1,0 +1,485 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+model Usuario {
+  id                    Int                  @id @default(autoincrement()) @map("id_usuario")
+  nombre                String               @db.VarChar(100)
+  apellido              String               @db.VarChar(100)
+  email                 String               @unique @db.VarChar(150)
+  telefono              String               @db.VarChar(20)
+  direccion             String
+  fechaRegistro         DateTime             @default(now()) @map("fecha_registro")
+  tipoUsuario           TipoUsuario          @map("tipo_usuario")
+  estado                Estado               @default(Activo)
+  cedula                String               @unique @db.VarChar(20)
+  fechaNacimiento       DateTime?            @map("fecha_nacimiento") @db.Date
+  passwordHash          String               @map("password_hash") @db.VarChar(255)
+  emailVerificado       Boolean              @default(false) @map("email_verificado")
+  tokenVerificacion     String?              @unique @map("token_verificacion") @db.VarChar(255)
+  expiraTokenVerif      DateTime?            @map("expira_token_verif")
+  resetPasswordToken    String?              @unique @map("reset_password_token") @db.VarChar(255)
+  resetPasswordExpires  DateTime?            @map("reset_password_expires")
+  resetPasswordUsed     Boolean              @default(false) @map("reset_password_used")
+  createdAt             DateTime             @default(now()) @map("created_at")
+  updatedAt             DateTime             @updatedAt @map("updated_at")
+  avaluos               Avaluo[]
+  carrito               Carrito[]
+  comentarios           ComentarioProducto[]
+  logsActividad         LogActividad[]
+  pagosValidados        Pago[]               @relation("ValidadorPagos")
+  parametrosModificados ParametrosSistema[]
+  pedidos               Pedido[]
+  rutasCobranza         RutaCobranza[]
+  sesiones              SesionUsuario[]
+  solicitudes           SolicitudPrestamo[]  @relation("SolicitudesCliente")
+  solicitudesEvaluadas  SolicitudPrestamo[]  @relation("SolicitudesEvaluadas")
+
+  @@map("usuario")
+}
+
+model TipoArticulo {
+  id                  Int        @id @default(autoincrement()) @map("id_tipo_articulo")
+  nombre              String     @unique @db.VarChar(100)
+  porcentajeMinAvaluo Decimal    @map("porcentaje_min_avaluo") @db.Decimal(5, 2)
+  porcentajeMaxAvaluo Decimal    @map("porcentaje_max_avaluo") @db.Decimal(5, 2)
+  requiereElectronico Boolean    @default(false) @map("requiere_electronico")
+  estado              Estado     @default(Activo)
+  createdAt           DateTime   @default(now()) @map("created_at")
+  updatedAt           DateTime   @updatedAt @map("updated_at")
+  articulos           Articulo[]
+
+  @@map("tipo_articulo")
+}
+
+model SolicitudPrestamo {
+  id                  Int             @id @default(autoincrement()) @map("id_solicitud")
+  usuarioId           Int             @map("id_usuario")
+  evaluadorId         Int?            @map("id_evaluador")
+  fechaSolicitud      DateTime        @default(now()) @map("fecha_solicitud")
+  estado              EstadoSolicitud @default(Pendiente)
+  observaciones       String?
+  fechaEvaluacion     DateTime?       @map("fecha_evaluacion")
+  createdAt           DateTime        @default(now()) @map("created_at")
+  updatedAt           DateTime        @updatedAt @map("updated_at")
+  montoSolicitado     Decimal?        @map("monto_solicitado") @db.Decimal(10, 2)
+  plazoMeses          Int?            @map("plazo_meses")
+  modalidadPago       String?         @map("modalidad_pago") @db.VarChar(50)
+  totalAPagar         Decimal?        @map("total_a_pagar") @db.Decimal(10, 2)
+  tasaInteres         Decimal?        @map("tasa_interes") @db.Decimal(5, 2)
+  clienteAceptoOferta Boolean         @default(false) @map("cliente_acepto_oferta")
+  fechaAceptacion     DateTime?       @map("fecha_aceptacion")
+  articulos           Articulo[]
+  contrato            Contrato?
+  usuario             Usuario         @relation("SolicitudesCliente", fields: [usuarioId], references: [id])
+  evaluador           Usuario?        @relation("SolicitudesEvaluadas", fields: [evaluadorId], references: [id])
+
+  @@map("solicitud_prestamo")
+}
+
+model Articulo {
+  id                       Int               @id @default(autoincrement()) @map("id_articulo")
+  solicitudId              Int               @map("id_solicitud")
+  tipoArticuloId           Int               @map("id_tipo_articulo")
+  descripcion              String
+  marca                    String?           @db.VarChar(100)
+  modelo                   String?           @db.VarChar(100)
+  serie                    String?           @db.VarChar(100)
+  color                    String?           @db.VarChar(50)
+  estadoFisico             EstadoFisico      @map("estado_fisico")
+  valorEstimadoCliente     Decimal?          @map("valor_estimado_cliente") @db.Decimal(10, 2)
+  especificacionesTecnicas String?           @map("especificaciones_tecnicas")
+  createdAt                DateTime          @default(now()) @map("created_at")
+  updatedAt                DateTime          @updatedAt @map("updated_at")
+  solicitud                SolicitudPrestamo @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
+  tipoArticulo             TipoArticulo      @relation(fields: [tipoArticuloId], references: [id])
+  avaluo                   Avaluo?
+  productoTienda           ProductoTienda?
+
+  @@map("articulo")
+}
+
+model Avaluo {
+  id                 Int      @id @default(autoincrement()) @map("id_avaluo")
+  articuloId         Int      @unique @map("id_articulo")
+  evaluadorId        Int      @map("id_evaluador")
+  valorComercial     Decimal  @map("valor_comercial") @db.Decimal(10, 2)
+  porcentajeAplicado Decimal  @map("porcentaje_aplicado") @db.Decimal(5, 2)
+  montoPrestamo      Decimal  @map("monto_prestamo") @db.Decimal(10, 2)
+  fechaAvaluo        DateTime @default(now()) @map("fecha_avaluo")
+  observaciones      String?
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+  articulo           Articulo @relation(fields: [articuloId], references: [id], onDelete: Cascade)
+  evaluador          Usuario  @relation(fields: [evaluadorId], references: [id])
+
+  @@map("avaluo")
+}
+
+model Contrato {
+  id                Int               @id @default(autoincrement()) @map("id_contrato")
+  solicitudId       Int               @unique @map("id_solicitud")
+  numeroContrato    String            @unique @map("numero_contrato") @db.VarChar(50)
+  fechaCreacion     DateTime          @default(now()) @map("fecha_creacion")
+  fechaFirma        DateTime?         @map("fecha_firma")
+  estadoFirma       EstadoFirma       @default(Pendiente) @map("estado_firma")
+  contenidoContrato String            @map("contenido_contrato")
+  hashFirma         String?           @map("hash_firma") @db.Text  
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  solicitud         SolicitudPrestamo @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
+  prestamo          Prestamo?
+
+  @@map("contrato")
+}
+
+model Prestamo {
+  id                  Int              @id @default(autoincrement()) @map("id_prestamo")
+  numeroPrestamo      String           @unique @map("numero_prestamo") @db.VarChar(50)
+  contratoId          Int              @unique @map("id_contrato")
+  montoPrestado       Decimal          @map("monto_prestado") @db.Decimal(10, 2)
+  tasaInteres         Decimal          @map("tasa_interes") @db.Decimal(5, 2)
+  plazoMeses          Int              @map("plazo_meses")
+  modalidadPago       String           @map("modalidad_pago") @db.VarChar(50)
+  totalAPagar         Decimal          @map("total_a_pagar") @db.Decimal(10, 2)
+  fechaInicio         DateTime         @map("fecha_inicio") @db.Date
+  fechaVencimiento    DateTime         @map("fecha_vencimiento") @db.Date
+  estado              EstadoPrestamo   @default(Pendiente_Firma)
+  saldoPendiente      Decimal          @map("saldo_pendiente") @db.Decimal(10, 2)
+  costoAlmacenamiento Decimal          @default(0) @map("costo_almacenamiento") @db.Decimal(8, 2)
+  createdAt           DateTime         @default(now()) @map("created_at")
+  updatedAt           DateTime         @updatedAt @map("updated_at")
+  pagos               Pago[]
+  planPagos           PlanPagos[]
+  contrato            Contrato         @relation(fields: [contratoId], references: [id], onDelete: Cascade)
+  visitasCobranza     VisitaCobranza[]
+
+  @@map("prestamo")
+}
+
+model PlanPagos {
+  id               Int         @id @default(autoincrement()) @map("id_plan_pago")
+  prestamoId       Int         @map("id_prestamo")
+  numeroCuota      Int         @map("numero_cuota")
+  fechaVencimiento DateTime    @map("fecha_vencimiento") @db.Date
+  montoCuota       Decimal     @map("monto_cuota") @db.Decimal(10, 2)
+  montoCapital     Decimal     @map("monto_capital") @db.Decimal(10, 2)
+  montoInteres     Decimal     @map("monto_interes") @db.Decimal(10, 2)
+  estado           EstadoCuota @default(Pendiente)
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @updatedAt @map("updated_at")
+  prestamo         Prestamo    @relation(fields: [prestamoId], references: [id], onDelete: Cascade)
+
+  @@map("plan_pagos")
+}
+
+model Pago {
+  id                    Int              @id @default(autoincrement()) @map("id_pago")
+  prestamoId            Int?             @map("id_prestamo")
+  pedidoId              Int?             @map("id_pedido")
+  montoPago             Decimal          @map("monto_pago") @db.Decimal(10, 2)
+  fechaPago             DateTime         @map("fecha_pago")
+  tipoPago              TipoPago         @map("tipo_pago")
+  comprobante           String?          @db.VarChar(500)
+  estadoValidacion      EstadoValidacion @default(Pendiente) @map("estado_validacion")
+  validadorId           Int?             @map("id_validador")
+  observaciones         String?
+  fechaDeposito         DateTime?        @map("fecha_deposito") @db.Date
+  nombreBanco           String?          @map("nombre_banco") @db.VarChar(100)
+  numeroTransaccion     String?          @map("numero_transaccion") @db.VarChar(100)
+  imagenComprobante     String?          @map("imagen_comprobante") @db.VarChar(500)
+  
+  createdAt             DateTime         @default(now()) @map("created_at")
+  updatedAt             DateTime         @updatedAt @map("updated_at")
+  prestamo              Prestamo?        @relation(fields: [prestamoId], references: [id])
+  pedido                Pedido?          @relation(fields: [pedidoId], references: [id])
+  validador             Usuario?         @relation("ValidadorPagos", fields: [validadorId], references: [id])
+
+  @@map("pago")
+}
+
+model ProductoTienda {
+  id                 Int                  @id @default(autoincrement()) @map("id_producto")
+  articuloId         Int                  @unique @map("id_articulo")
+  precioVenta        Decimal              @map("precio_venta") @db.Decimal(10, 2)
+  fechaPublicacion   DateTime             @default(now()) @map("fecha_publicacion")
+  estado             EstadoProducto       @default(Disponible)
+  descuentoAplicado  Decimal              @default(0) @map("descuento_aplicado") @db.Decimal(5, 2)
+  diasEnInventario   Int                  @default(0) @map("dias_en_inventario")
+  categoria          String               @db.VarChar(100)
+  valoracionPromedio Decimal              @default(0) @map("valoracion_promedio") @db.Decimal(3, 2)
+  createdAt          DateTime             @default(now()) @map("created_at")
+  updatedAt          DateTime             @updatedAt @map("updated_at")
+  carrito            Carrito[]
+  comentarios        ComentarioProducto[]
+  detallesPedido     DetallePedido[]
+  articulo           Articulo             @relation(fields: [articuloId], references: [id], onDelete: Cascade)
+
+  @@map("producto_tienda")
+}
+
+model Pedido {
+  id                        Int             @id @default(autoincrement()) @map("id_pedido")
+  usuarioCompradorId        Int             @map("id_usuario_comprador")
+  fechaPedido               DateTime        @default(now()) @map("fecha_pedido")
+  totalPedido               Decimal         @map("total_pedido") @db.Decimal(10, 2)
+  estadoPedido              EstadoPedido    @default(Procesando) @map("estado_pedido")
+  direccionEnvio            String          @map("direccion_envio")
+  metodoPago                String          @map("metodo_pago") @db.VarChar(100)
+  subtotal                  Decimal?        @db.Decimal(10, 2)
+  iva                       Decimal?        @db.Decimal(10, 2)
+  costoEnvio                Decimal?        @map("costo_envio") @db.Decimal(10, 2)
+  bancoOrigen               String?         @map("banco_origen") @db.VarChar(100)
+  fechaTransferencia        DateTime?       @map("fecha_transferencia") @db.Date
+  numeroTransaccion         String?         @map("numero_transaccion") @db.VarChar(100)
+  comprobanteTransferencia  String?         @map("comprobante_transferencia") @db.VarChar(500)
+  createdAt                 DateTime        @default(now()) @map("created_at")
+  updatedAt                 DateTime        @updatedAt @map("updated_at")
+  detalles                  DetallePedido[]
+  pagos                     Pago[]
+  usuarioComprador          Usuario         @relation(fields: [usuarioCompradorId], references: [id])
+
+  @@map("pedido")
+}
+model DetallePedido {
+  id             Int            @id @default(autoincrement()) @map("id_detalle")
+  pedidoId       Int            @map("id_pedido")
+  productoId     Int            @map("id_producto")
+  cantidad       Int
+  precioUnitario Decimal        @map("precio_unitario") @db.Decimal(10, 2)
+  subtotal       Decimal        @db.Decimal(10, 2)
+  createdAt      DateTime       @default(now()) @map("created_at")
+  pedido         Pedido         @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  producto       ProductoTienda @relation(fields: [productoId], references: [id])
+
+  @@map("detalle_pedido")
+}
+
+model Carrito {
+  id            Int            @id @default(autoincrement()) @map("id_carrito")
+  usuarioId     Int            @map("id_usuario")
+  productoId    Int            @map("id_producto")
+  cantidad      Int
+  fechaAgregado DateTime       @default(now()) @map("fecha_agregado")
+  producto      ProductoTienda @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  usuario       Usuario        @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, productoId])
+  @@map("carrito")
+}
+
+model RutaCobranza {
+  id           Int              @id @default(autoincrement()) @map("id_ruta")
+  cobradorId   Int              @map("id_cobrador")
+  fechaRuta    DateTime         @map("fecha_ruta") @db.Date
+  zonaAsignada String           @map("zona_asignada") @db.VarChar(200)
+  estado       EstadoRuta       @default(Asignada)
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
+  cobrador     Usuario          @relation(fields: [cobradorId], references: [id])
+  visitas      VisitaCobranza[]
+
+  @@map("ruta_cobranza")
+}
+
+model VisitaCobranza {
+  id            Int             @id @default(autoincrement()) @map("id_visita")
+  rutaId        Int             @map("id_ruta")
+  prestamoId    Int             @map("id_prestamo")
+  fechaVisita   DateTime        @map("fecha_visita")
+  resultado     ResultadoVisita
+  montoCobrado  Decimal         @default(0) @map("monto_cobrado") @db.Decimal(10, 2)
+  observaciones String?
+  ubicacionGps  String?         @map("ubicacion_gps") @db.VarChar(100)
+  createdAt     DateTime        @default(now()) @map("created_at")
+  prestamo      Prestamo        @relation(fields: [prestamoId], references: [id])
+  ruta          RutaCobranza    @relation(fields: [rutaId], references: [id], onDelete: Cascade)
+
+  @@map("visita_cobranza")
+}
+
+model Documento {
+  id            Int           @id @default(autoincrement()) @map("id_documento")
+  tipoDocumento TipoDocumento @map("tipo_documento")
+  nombreArchivo String        @map("nombre_archivo") @db.VarChar(255)
+  rutaArchivo   String        @map("ruta_archivo") @db.VarChar(500)
+  fechaSubida   DateTime      @default(now()) @map("fecha_subida")
+  idRelacionado Int           @map("id_relacionado")
+  tipoRelacion  TipoRelacion  @map("tipo_relacion")
+  tamanoArchivo BigInt?       @map("tamano_archivo")
+  tipoMime      String?       @map("tipo_mime") @db.VarChar(100)
+  createdAt     DateTime      @default(now()) @map("created_at")
+
+  @@map("documento")
+}
+
+model ParametrosSistema {
+  id                Int      @id @default(autoincrement()) @map("id_parametro")
+  nombreParametro   String   @unique @map("nombre_parametro") @db.VarChar(100)
+  valorParametro    String   @map("valor_parametro")
+  descripcion       String?
+  tipoDato          TipoDato @map("tipo_dato")
+  fechaModificacion DateTime @default(now()) @map("fecha_modificacion")
+  usuarioModificoId Int      @map("id_usuario_modifico")
+  createdAt         DateTime @default(now()) @map("created_at")
+  usuarioModifico   Usuario  @relation(fields: [usuarioModificoId], references: [id])
+
+  @@map("parametros_sistema")
+}
+
+model ComentarioProducto {
+  id              Int            @id @default(autoincrement()) @map("id_comentario")
+  productoId      Int            @map("id_producto")
+  usuarioId       Int            @map("id_usuario")
+  calificacion    Int
+  comentario      String
+  fechaComentario DateTime       @default(now()) @map("fecha_comentario")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  producto        ProductoTienda @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  usuario         Usuario        @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@map("comentario_producto")
+}
+
+model SesionUsuario {
+  id          String    @id @default(uuid()) @map("id_sesion") @db.Uuid
+  usuarioId   Int       @map("id_usuario")
+  ipInicio    String?   @map("ip_inicio") @db.Inet
+  userAgent   String?   @map("user_agent")
+  fechaInicio DateTime  @default(now()) @map("fecha_inicio")
+  fechaFin    DateTime? @map("fecha_fin")
+  tipoSesion  String    @default("web") @map("tipo_sesion") @db.VarChar(20)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  usuario     Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@map("sesion_usuario")
+}
+
+model LogActividad {
+  id        Int      @id @default(autoincrement()) @map("id_log")
+  usuarioId Int?     @map("id_usuario")
+  accion    String   @db.VarChar(100)
+  entidad   String   @db.VarChar(100)
+  entidadId String?  @map("entidad_id") @db.VarChar(100)
+  detalles  Json?
+  ipAddress String   @map("ip_address") @db.VarChar(45)
+  userAgent String?  @map("user_agent")
+  fechaHora DateTime @default(now()) @map("fecha_hora")
+  createdAt DateTime @default(now()) @map("created_at")
+  usuario   Usuario? @relation(fields: [usuarioId], references: [id])
+
+  @@map("log_actividad")
+}
+
+enum TipoUsuario {
+  Cliente
+  Administrador
+  Evaluador
+  Cobrador
+}
+
+enum Estado {
+  Activo
+  Inactivo
+}
+
+enum EstadoSolicitud {
+  Pendiente
+  Aprobada
+  Rechazada
+  Evaluando
+}
+
+enum EstadoFisico {
+  Excelente
+  Bueno
+  Regular
+  Malo
+}
+
+enum EstadoFirma {
+  Pendiente
+  Firmado
+}
+
+enum EstadoPrestamo {
+  Pendiente_Firma
+  Activo
+  Pagado
+  Vencido
+  En_Mora
+}
+
+enum EstadoCuota {
+  Pendiente
+  Pagado
+  Vencido
+}
+
+enum TipoPago {
+  Transferencia
+  Efectivo
+  Deposito
+}
+
+enum EstadoValidacion {
+  Pendiente
+  Validado
+  Rechazado
+}
+
+enum EstadoProducto {
+  Disponible
+  Vendido
+  Retirado
+}
+
+enum EstadoPedido {
+  Pendiente
+  Procesando
+  Enviado
+  Entregado
+  Cancelado
+}
+
+enum EstadoRuta {
+  Asignada
+  En_Progreso
+  Completada
+}
+
+enum ResultadoVisita {
+  Pago
+  Promesa
+  No_Contacto
+}
+
+enum TipoDocumento {
+  Foto_Prenda
+  Especificaciones
+  Comprobante
+  Contrato
+  Identificacion
+  Recibo
+}
+
+enum TipoRelacion {
+  Solicitud
+  Pago
+  Visita
+  Usuario
+}
+
+enum TipoDato {
+  STRING
+  INTEGER
+  DECIMAL
+  BOOLEAN
+  DATE
+}
