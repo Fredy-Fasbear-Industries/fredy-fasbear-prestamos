@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="[https://github.com/VonDefiant/fredy-fasbear-prestamos/blob/main/BACKEND/assets/images/ICON.jpg?raw=true](https://github.com/Fredy-Fasbear-Industries/fredy-fasbear-prestamos/blob/main/BACKEND/assets/images/ICON.jpg)" alt="Fredy Fasbear Logo" width="200"/>
+<img src="https://github.com/Fredy-Fasbear-Industries/fredy-fasbear-prestamos/blob/main/BACKEND/assets/images/ICON.jpg" alt="Fredy Fasbear Logo" width="200"/>
 
 # Fredy Fasbear Préstamos
 
